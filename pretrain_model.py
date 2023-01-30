@@ -49,7 +49,8 @@ from apex.amp import _amp_state
 from schedulers import LinearWarmUpScheduler, PolyWarmUpScheduler
 from transformers import (
     BertConfig, BertTokenizer, BertForPreTraining,
-    CharacterBertConfig, CharacterBertTokenizer, CharacterBertForPreTraining
+    CharacterBertConfig, CharacterBertTokenizer, CharacterBertForPreTraining,
+    CharacterBertForMaskedLM
 )
 
 from utils.distributed import is_main_process
@@ -93,13 +94,14 @@ class PretrainingDataset(Dataset):
         self.hdf5_fpath = hdf5_fpath
         self.max_masked_tokens_per_input = max_masked_tokens_per_input
         file_in = h5py.File(hdf5_fpath, "r")
+        #MODIFICATION to exclude NSP
         keys = [
             'input_ids',
             'input_mask',
             'segment_ids',
             'masked_lm_positions',
             'masked_lm_ids',
-            'next_sentence_labels'
+            # 'next_sentence_labels'
         ]
         self.inputs = [np.asarray(file_in[key][:]) for key in keys]
         file_in.close()
@@ -113,7 +115,8 @@ class PretrainingDataset(Dataset):
         # Get elements at `index` as torch tensors
         [
             input_ids, input_mask, segment_ids,
-            masked_lm_positions, masked_lm_ids, next_sentence_labels
+            masked_lm_positions, masked_lm_ids, 
+            # next_sentence_labels
         ] = [
             torch.from_numpy(element[index].astype(np.int64)) if i < 5
             else torch.from_numpy(np.asarray(element[index].astype(np.int64)))
@@ -130,7 +133,8 @@ class PretrainingDataset(Dataset):
 
         return [
             input_ids, segment_ids, input_mask,
-            masked_lm_labels, next_sentence_labels
+            masked_lm_labels, 
+            # next_sentence_labels
         ]
 
 
@@ -345,7 +349,7 @@ def parse_args():
     )
     parser.add_argument(
         '--num_checkpoints_to_keep',
-        type=int, default=3,
+        type=int, default=2,
         help=\
             "Maximum number of checkpoints to keep."
     )
@@ -414,6 +418,7 @@ class ModelPretrainer:
         # Set CUDA-related attributes
         self.training_is_distributed = (self.local_rank != -1)
         if self.training_is_distributed:
+            logging.info("Training is distributed")
             torch.cuda.set_device(self.local_rank)
             self.device = torch.device("cuda", self.local_rank)
             # Initialize distributed backend (takes care of sychronizing nodes/GPUs)
@@ -477,7 +482,8 @@ class ModelPretrainer:
         if self.is_character_bert:
             model_config = CharacterBertConfig.from_pretrained(
                 os.path.join(WORKDIR, 'data', 'character-bert'))
-            model = CharacterBertForPreTraining(model_config)
+            # model = CharacterBertForPreTraining(model_config)
+            model = CharacterBertForMaskedLM(model_config)
         else:
             model_config = BertConfig.from_pretrained(
                 os.path.join(WORKDIR, 'data', 'bert-base-uncased'))
@@ -807,7 +813,7 @@ class ModelPretrainer:
                         segment_ids,
                         input_mask,
                         masked_lm_labels,
-                        next_sentence_labels
+                        # next_sentence_labels
                     ) = [tensor.to(self.device) for tensor in batch]
 
                     # Forward Pass
@@ -816,7 +822,8 @@ class ModelPretrainer:
                         token_type_ids=segment_ids,
                         attention_mask=input_mask,
                         labels=masked_lm_labels,
-                        next_sentence_label=next_sentence_labels)
+                        # next_sentence_label=next_sentence_labels
+                    )
                     loss = model_output['loss']
                     if self.n_gpu > 1:
                         loss = loss.mean()  # mean() to average on multi-gpu.
@@ -940,6 +947,7 @@ class ModelPretrainer:
                         + torch.distributed.get_rank()
                     ) % num_files
                 ]
+            logging.info("WORLD SIZE: {}".format(torch.distributed.get_world_size()))
 
             # Set previous_file variable for next iteration
             previous_file = hdf5_fpath
@@ -956,6 +964,7 @@ class ModelPretrainer:
                 batch_size=self.batch_size * self.n_gpu,
                 num_workers=4, pin_memory=True
             )
+            logging.info("Size of dataloader: {}".format(len(train_dataloader)))
             overflow_buf = None
             if self.allreduce_post_accumulation:
                 overflow_buf = torch.cuda.IntTensor([0])
@@ -967,6 +976,7 @@ class ModelPretrainer:
 
                 # Submit creation of next DataLoader
                 if torch.distributed.get_world_size() > num_files:
+                    
                     hdf5_fpath = files[
                         (
                             f_id * torch.distributed.get_world_size()
@@ -1006,7 +1016,7 @@ class ModelPretrainer:
                         segment_ids,
                         input_mask,
                         masked_lm_labels,
-                        next_sentence_labels
+                        # next_sentence_labels
                     ) = [tensor.to(self.device) for tensor in batch]
 
                     # Forward Pass
@@ -1015,7 +1025,8 @@ class ModelPretrainer:
                         token_type_ids=segment_ids,
                         attention_mask=input_mask,
                         labels=masked_lm_labels,
-                        next_sentence_label=next_sentence_labels)
+                        # next_sentence_label=next_sentence_labels
+                        )
                     loss = model_output['loss']
                     if self.n_gpu > 1:
                         loss = loss.mean()  # mean() to average on multi-gpu.
@@ -1041,6 +1052,7 @@ class ModelPretrainer:
                     # Take optimizer/scheduler step every (gradient_acc_steps) steps
                     # This is the model parameter update:
                     if training_steps % self.num_accumulation_steps == 0:
+                        logging.info("Training steps: {}".format(training_steps))
                         self.lr_scheduler.step()  # learning rate warmup
                         self.take_optimizer_step(overflow_buf)
 

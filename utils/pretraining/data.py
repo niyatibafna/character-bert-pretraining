@@ -20,7 +20,7 @@ https://github.com/NVIDIA/DeepLearningExamples/blob/master/PyTorch/LanguageModel
 """
 from typing import List, Optional
 
-import os
+import os, sys
 import random
 import logging
 from collections import OrderedDict
@@ -301,7 +301,9 @@ class PreTrainingDataGenerator:
                     # or if the chunk only has one sentence,
                     # segment `B` is from another random document
                     # (does not follow `A`, i.e. NSP target is False)
-                    if len(current_chunk) == 1 or random.random() < 0.5:
+                    # if len(current_chunk) == 1 or random.random() < 0.5:
+                    if len(current_chunk) == 1 or random.random() < -1: 
+                        # MODIFICATION : We DO NOT want the NSP objective, we always make consecutive spans.
                         is_random_next = True
                         target_b_length = target_input_length - len(tokens_a)
 
@@ -565,6 +567,9 @@ class PreTrainingDataGenerator:
         output_hdf5_fpath = os.path.join(
             self.output_directory, basename.replace('.txt', '.hdf5'))
 
+        if os.path.isfile(output_hdf5_fpath):
+            return
+            
         logging.info("Saving data...")
         f = h5py.File(output_hdf5_fpath, 'w')
         f.create_dataset(
