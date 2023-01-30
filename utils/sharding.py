@@ -56,7 +56,9 @@ class CorpusSharder:
 
         self.input_file = formatted_corpus_path
         # Recover corpus name from formatted corpus path
-        prefix = os.path.basename(os.path.dirname(self.input_file))
+        # prefix = os.path.basename(os.path.dirname(self.input_file))
+        # Recover language name from file 
+        prefix = self.input_file.split("/")[-1].split(".")[0]
         save_path = os.path.join(SHARDS_DIRECTORY, prefix)
         os.makedirs(save_path, exist_ok=True)            
         self.save_path = save_path
@@ -70,6 +72,7 @@ class CorpusSharder:
         self.n_sentences_per_corpus = {}
         self.n_documents_per_corpus = {}
         self.n_sentences_per_document_per_corpus = {}
+        self.onepass = 1000
 
     def make_shards(self):
         text_files_in_save_path = [
@@ -105,7 +108,9 @@ class CorpusSharder:
                 line = line.strip()
 
                 # If line is not blank (we are within a document)
-                if line != '':
+                # if line != '':
+                ## MODIFICATION: WRITING 1000 LINES INTO SHARD EVERY TIME
+                if n_written_lines < 1000:
                     # Write the line in the shard file
                     f_out.write(line + '\n')
                     # Update count
@@ -113,7 +118,7 @@ class CorpusSharder:
 
                 # If line is blank (we are outsite a document)
                 else:
-                    f_out.write('\n')  # Add a blank line to shard file
+                    # f_out.write('\n')  # Add a blank line to shard file
                     n_sentences_per_shard[smallest_shard] += n_written_lines  # Update shard counters
 
                     # Find smallest shard
@@ -135,7 +140,7 @@ class CorpusSharder:
         # formatted corpora combined). I keep the code here so that it can be
         # easilly adapted to the case of multiple formatted corpus files
         if n_written_lines != 0:
-            f_out.write('\n')  # Add a blank line to shard file
+            # f_out.write('\n')  # Add a blank line to shard file
             n_sentences_per_shard[smallest_shard] += n_written_lines  # Update shard counters
 
             # Find smallest shard
