@@ -20,6 +20,7 @@ import concurrent.futures
 
 from tqdm import tqdm
 from glob import glob
+import random
 
 from utils.pretraining.data import PreTrainingDataGenerator
 
@@ -129,6 +130,7 @@ def pretraining_data_generation_job(shard_fpath):
 
 # Get all shards paths
 all_shard_fpaths = list(glob(args.shards_path + '/*'))
+random.shuffle(all_shard_fpaths)
 
 # Run conversion in parallel
 logging.info('Concurrently converting shards into pre-training data...')
@@ -136,6 +138,12 @@ with concurrent.futures.ProcessPoolExecutor() as executor:
     # Submit jobs
     jobs = []
     for shard_fpath in all_shard_fpaths:
+        basename = os.path.basename(shard_fpath)
+        output_hdf5_fpath = os.path.join(
+            args.output_directory, basename.replace('.txt', '.hdf5'))
+
+        if os.path.isfile(output_hdf5_fpath):
+            continue
         job = executor.submit(pretraining_data_generation_job, shard_fpath)
         jobs.append(job)
     # Update a progress bar as jobs complete
