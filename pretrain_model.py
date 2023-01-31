@@ -245,7 +245,12 @@ def parse_args():
     parser.add_argument(
         "--resume_pretraining",
         action='store_true',
-        help="Whether to resume pre-training from a checkpoint."
+        help="Whether to resume pre-training from a checkpoint"
+    )
+    parser.add_argument(
+        "--extended_pretraining",
+        action='store_true',
+        help="Whether pretraining is resumed from a different language. Checkpoint path should be provided self.init_checkpoint"
     )
     parser.add_argument(
         '--resume_step',
@@ -384,6 +389,7 @@ class ModelPretrainer:
         self.phase2 = args.phase2
         self.init_checkpoint = args.init_checkpoint
         self.resume_pretraining = args.resume_pretraining
+        self.extended_pretraining = args.extended_pretraining
         self.resume_step = args.resume_step
         self.max_input_length = args.max_input_length
         self.max_masked_tokens_per_input = args.max_masked_tokens_per_input
@@ -448,7 +454,7 @@ class ModelPretrainer:
         self.batch_size = self.target_batch_size // self.num_accumulation_steps
 
         # Make sure self.output_directory is empty when starting a training from scratch:
-        if not self.resume_pretraining:
+        if not self.resume_pretraining and not self.extended_pretraining:
             os.makedirs(self.output_directory, exist_ok=True)
             assert not any([
                 fname.startswith('ckpt')
@@ -496,14 +502,15 @@ class ModelPretrainer:
             )
 
         # Load checkpoint if any:
-        if not self.resume_pretraining:
+        if not self.resume_pretraining and not self.extended_pretraining:
             # CASE: no checkpoint -> training from scratch
             self.global_step = 0
             if self.is_main_process:
                 logging.info("Pre-training from scratch (good luck!)")
+            
         else:
             if self.init_checkpoint:
-                # CASE: load checkpoint from direct path
+                # CASE: extended pretraining OR load checkpoint from direct path of current model
                 self.global_step = 0
                 init_checkpoint = self.init_checkpoint
                 if self.is_main_process:
@@ -555,33 +562,33 @@ class ModelPretrainer:
             # a different domain with CharacterBERT requires changing the
             # output layer with a topK tokens matrix from the new domain.
 
-            # # Case where we would retrain a general_domain CharacterBERT
-            # # on the medical domain. Don't use the general domain output layer:
-            # if self.is_medical_domain and self.is_character_bert and (not self.phase2):
-            #     model.load_state_dict(
-            #         {
-            #             k: v for (k, v) in self.checkpoint['model'].items()
-            #             # Don't load output matrix from general domain model
-            #             if not k.startswith('cls.predictions')  # ignoring the old output layer
-            #         },
-            #         strict=False)
-            #     if self.is_main_process:
-            #         logging.warning(
-            #             "Loaded model weights from `%s`, "
-            #             "but ignored the `cls.predictions` module.",
-            #             init_checkpoint)
-
-            # # General case: load weights from checkpoint
-            # else:
-            #     model.load_state_dict(self.checkpoint['model'], strict=True)
-            #     if self.is_main_process:
-            #         logging.info('Loaded model weights from `%s`',
-            #                      init_checkpoint)
+            # Case where we would retrain a general_domain CharacterBERT
+            # on the medical domain. Don't use the general domain output layer:
+            if self.extended_pretraining:
+                model.load_state_dict(
+                    {
+                        k: v for (k, v) in self.checkpoint['model'].items()
+                        # Don't load output matrix from general domain model
+                        if not k.startswith('cls.predictions')  # ignoring the old output layer
+                    },
+                    strict=False)
+                if self.is_main_process:
+                    logging.warning(
+                        "Loaded model weights from `%s`, "
+                        "but ignored the `cls.predictions` module.",
+                        init_checkpoint)
 
             # General case: load weights from checkpoint
-            model.load_state_dict(self.checkpoint['model'], strict=True)
-            if self.is_main_process:
-                logging.info('Loaded model weights from `%s`', init_checkpoint)
+            else:
+                model.load_state_dict(self.checkpoint['model'], strict=True)
+                if self.is_main_process:
+                    logging.info('Loaded model weights from `%s`',
+                                 init_checkpoint)
+
+            # General case: load weights from checkpoint
+            # model.load_state_dict(self.checkpoint['model'], strict=True)
+            # if self.is_main_process:
+            #     logging.info('Loaded model weights from `%s`', init_checkpoint)
 
             # Deduce previous steps from phase1 when in phase2
             if self.phase2 and not self.init_checkpoint:
