@@ -110,7 +110,7 @@ class CorpusSharder:
                 # If line is not blank (we are within a document)
                 # if line != '':
                 ## MODIFICATION: WRITING 1000 LINES INTO SHARD EVERY TIME
-                if n_written_lines < 1000:
+                if n_written_lines < 25:
                     # Write the line in the shard file
                     f_out.write(line + '\n')
                     # Update count

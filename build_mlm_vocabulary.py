@@ -46,7 +46,11 @@ def main():
     args = parser.parse_args()
 
     # Recover corpus name from corpus path
-    prefix = os.path.basename(os.path.dirname(args.formatted_corpus_path))
+    # prefix = os.path.basename(os.path.dirname(args.formatted_corpus_path))
+    # save_path = os.path.join(MLM_VOCABULARY_DIRECTORY, prefix)
+
+    # Recover language name from corpus path
+    prefix = args.formatted_corpus_path.split("/")[-1].split(".")[0]
     save_path = os.path.join(MLM_VOCABULARY_DIRECTORY, prefix)
     os.makedirs(save_path, exist_ok=True)
 
