@@ -354,7 +354,7 @@ def parse_args():
     )
     parser.add_argument(
         '--num_checkpoints_to_keep',
-        type=int, default=2,
+        type=int, default=3,
         help=\
             "Maximum number of checkpoints to keep."
     )
@@ -903,7 +903,7 @@ class ModelPretrainer:
         if self.is_main_process:
             tensorboard_log_fpath = os.path.join(
                     WORKDIR,
-                    '.tensorboard_logs',
+                    'scripts/.tensorboard_logs',
                     self.tensorboard_id,
                     self.start_datetime.strftime("%d-%m-%Y_%H-%M-%S")
             )
