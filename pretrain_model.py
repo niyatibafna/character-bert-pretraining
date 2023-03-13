@@ -903,7 +903,7 @@ class ModelPretrainer:
         if self.is_main_process:
             tensorboard_log_fpath = os.path.join(
                     WORKDIR,
-                    '.tensorboard_logs',
+                    'scripts/.tensorboard_logs',
                     self.tensorboard_id,
                     self.start_datetime.strftime("%d-%m-%Y_%H-%M-%S")
             )
