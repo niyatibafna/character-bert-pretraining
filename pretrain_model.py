@@ -903,7 +903,7 @@ class ModelPretrainer:
         if self.is_main_process:
             tensorboard_log_fpath = os.path.join(
                     WORKDIR,
-                    'scripts/.tensorboard_logs',
+                    '.tensorboard_logs',
                     self.tensorboard_id,
                     self.start_datetime.strftime("%d-%m-%Y_%H-%M-%S")
             )
@@ -930,6 +930,8 @@ class ModelPretrainer:
             else:
                 f_start_id = self.checkpoint['files'][0]
                 files = self.checkpoint['files'][1:]
+                if "character_bert" in files[0]:
+                    files = [f.replace("/character_bert/", "/hin/") for f in files]
                 self.resume_pretraining = False
             num_files = len(files)
 
